@@ -1,0 +1,20 @@
+{
+    "name": "Chunks",
+    "description": "Analyze chunks by their brick count and collider count.",
+    "author": "x",
+    "config": {
+        "authorized": {
+            "description": "A list of players authorized to use chunk analyzing commands.",
+            "type": "players",
+            "default": []
+        }
+    },
+    "commands": [
+        {"name": "/chunks in", "description": "Display the chunk you are in.", "example": "/chunks in"},
+        {"name": "/chunks analyze", "description": "Save the game, then analyze its chunks, allowing for other commands to be run.", "example": "/chunks analyze"},
+        {"name": "/chunks count", "description": "Display the number of bricks and colliders in the current chunk.", "example": "/chunks count"},
+        {"name": "/chunks mark", "description": "Mark the 8 corners of the current chunk you are in with glowing 1x1x1 microbricks. White is unanalyzed, green is below limit, red is over limit.", "example": "/chunks mark"},
+        {"name": "/chunks markall", "description": "Mark the 8 corners of all analyzed chunks with bricks in them with glowing 1x1x1 microbricks. White is unanalyzed, green is below limit, red is over limit.", "example": "/chunks markall"},
+        {"name": "/chunks clear", "description": "Clear all of the chunk corner markers created with the marking commands, if any.", "example": "/chunks clear"}
+    ]
+}

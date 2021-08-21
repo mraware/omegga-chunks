@@ -1,14 +1,15 @@
 #!/bin/bash
 FILE=omegga-chunks
 BASE=$(dirname "$0")
-DEBUG=/target/debug/
-RELEASE=/target/release/
-DIST=/bin/
+DEBUG=./target/debug/
+RELEASE=./target/release/
+DIST=./bin/
 
+cd $BASE
 if test -f "$DEBUG$FILE"; then
-    `$BASE$DEBUG$FILE`
+    `$DEBUG$FILE`
 elif test -f "$RELEASE$FILE"; then
-    `$BASE$RELEASE$FILE`
+    `$RELEASE$FILE`
 else 
-    `$BASE$DIST$FILE`
+    `$DIST$FILE`
 fi

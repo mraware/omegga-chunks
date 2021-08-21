@@ -6,7 +6,7 @@ maps become so dense that you run into collision issues.
 
 ## Installation
 
-`omegga install gh:voximity/omegga-chunks`
+`omegga install gh:voximity/chunks`
 
 ## Usage
 

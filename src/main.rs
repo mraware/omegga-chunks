@@ -303,7 +303,7 @@ async fn run_command(
                     let opt = save.chunk_colliders.get(&chunk_pos);
                     let marker_data = mark_chunks(&vec![(chunk_pos, opt.copied())]);
                     omegga.load_save_data(marker_data, true, (0, 0, 0)).await?;
-                    omegga.whisper(user, "<color=\"0a0\">Your chunk hasa been marked.</>");
+                    omegga.whisper(user, "<color=\"0a0\">Your chunk has been marked.</>");
                 }
                 None => omegga.whisper(user, "<color=\"a00\">The save has not been analyzed! Analyze it first with <code>/chunks analyze</>.</>"),
             }

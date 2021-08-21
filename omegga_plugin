@@ -1,14 +1,14 @@
 #!/bin/bash
 FILE=omegga-chunks
-DEBUG=./target/debug/
-RELEASE=./target/release/
-DIST=./bin/
+BASE=$(dirname "$0")
+DEBUG=/target/debug/
+RELEASE=/target/release/
+DIST=/bin/
 
-cd plugins/omegga-chunks
 if test -f "$DEBUG$FILE"; then
-    `$DEBUG$FILE`
+    `$BASE$DEBUG$FILE`
 elif test -f "$RELEASE$FILE"; then
-    `$RELEASE$FILE`
+    `$BASE$RELEASE$FILE`
 else 
-    `$DIST$FILE`
+    `$BASE$DIST$FILE`
 fi

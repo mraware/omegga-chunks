@@ -13,7 +13,7 @@ use tokio::{sync::RwLock, time::sleep};
 
 const SAVE_NAME: &'static str = "_omegga_chunks";
 const MARKER_OWNER_UUID: &'static str = "00000000-0000-0000-0000-000000000001";
-const CHUNK_SIZE: i32 = 512;
+const CHUNK_SIZE: i32 = 1024;
 const COLLIDER_LIMIT: u32 = 65000;
 const COMPONENT_LIMIT: u32 = 75;
 const MARKER_COLORS: [BrickColor; 5] = [
@@ -122,7 +122,6 @@ pub fn mark_chunks(chunks: &[((i32, i32, i32), Option<(u32, u32, u32)>)]) -> Sav
             Some((_, colliders, components)) if *colliders > COLLIDER_LIMIT && *components > COMPONENT_LIMIT => 4,
             Some((_, _colliders, components)) if *components > COMPONENT_LIMIT => 3,
             Some((_, colliders, _components)) if *colliders > COLLIDER_LIMIT => 2,
-            Some((_, colliders, _components)) if *colliders <= COLLIDER_LIMIT => 1,
             _ => 0,
         };
 
@@ -130,8 +129,8 @@ pub fn mark_chunks(chunks: &[((i32, i32, i32), Option<(u32, u32, u32)>)]) -> Sav
             bricks.push(Brick {
                 owner_index: 1,
                 asset_name_index: 0,
-                material_index: 0,
-                material_intensity: 5,
+                material_index: if col > 0 { 0 } else { 1 },
+                material_intensity: 1,
                 color: MARKER_COLORS[col].clone(),
                 size: Size::Procedural(1, 1, 1),
                 position: chunk_corner(i, center),
@@ -143,7 +142,7 @@ pub fn mark_chunks(chunks: &[((i32, i32, i32), Option<(u32, u32, u32)>)]) -> Sav
     SaveData {
         header2: Header2 {
             brick_assets: vec!["PB_DefaultMicroBrick".into()],
-            materials: vec!["BMC_Glow".into()],
+            materials: vec!["BMC_Glow".into(),"BMC_Plastic".into()],
             brick_owners: vec![BrickOwner {
                 id: MARKER_OWNER_UUID.parse().unwrap(),
                 name: "Chunk Marker".into(),

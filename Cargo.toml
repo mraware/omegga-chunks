@@ -7,9 +7,9 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-brickadia = "0.1.8"
+brickadia = "0.1.26"
 lazy_static = "1.4.0"
-omegga = { version = "0.2.3", features = ["brs"] }
+omegga = { version = "1.0.0", features = ["brs"] }
 serde = "1.0"
 serde_json = "1.0"
 tokio = "1.10"

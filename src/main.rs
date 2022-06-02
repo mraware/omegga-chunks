@@ -6,16 +6,17 @@ use brickadia::{
     save::{Brick, BrickColor, BrickOwner, Color, Header2, SaveData, Size},
 };
 use lazy_static::lazy_static;
-use omegga::{rpc, Omegga};
+use omegga::{Omegga, events::Event};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json};
 use tokio::{sync::RwLock, time::sleep};
 
 const SAVE_NAME: &'static str = "_omegga_chunks";
 const MARKER_OWNER_UUID: &'static str = "00000000-0000-0000-0000-000000000001";
-const CHUNK_SIZE: i32 = 1024;
+const CHUNK_SIZE: i32 = 512;
 const COLLIDER_LIMIT: u32 = 65000;
-const MARKER_COLORS: [BrickColor; 3] = [
+const COMPONENT_LIMIT: u32 = 75;
+const MARKER_COLORS: [BrickColor; 5] = [
     BrickColor::Unique(Color {
         r: 255,
         g: 255,
@@ -34,6 +35,18 @@ const MARKER_COLORS: [BrickColor; 3] = [
         b: 0,
         a: 255,
     }),
+    BrickColor::Unique(Color {
+        r: 0,
+        g: 0,
+        b: 255,
+        a: 255,
+    }),
+      BrickColor::Unique(Color {
+        r: 255,
+        g: 0,
+        b: 255,
+        a: 255,
+    })
 ];
 
 #[rustfmt::skip]
@@ -73,7 +86,7 @@ pub fn chunk_corner(i: usize, center: (i32, i32, i32)) -> (i32, i32, i32) {
 }
 
 struct AnalyzedSave {
-    chunk_colliders: HashMap<(i32, i32, i32), (u32, u32)>,
+    chunk_colliders: HashMap<(i32, i32, i32), (u32, u32, u32)>,
 }
 
 impl From<SaveData> for AnalyzedSave {
@@ -89,9 +102,10 @@ impl From<SaveData> for AnalyzedSave {
             let collider_count = *BRICK_COLLIDERS
                 .get(data.header2.brick_assets[brick.asset_name_index as usize].as_str())
                 .unwrap_or(&1);
+            let component_count = brick.components.keys().len() as u32;
             map.entry(chunk_pos)
-                .and_modify(|c: &mut (u32, u32)| *c = (c.0 + 1, c.1 + collider_count))
-                .or_insert((1, collider_count));
+                .and_modify(|c: &mut (u32, u32, u32)| *c = (c.0 + 1, c.1 + collider_count, c.2 + component_count))
+                .or_insert((1, collider_count, component_count));
         }
         Self {
             chunk_colliders: map,
@@ -99,14 +113,16 @@ impl From<SaveData> for AnalyzedSave {
     }
 }
 
-pub fn mark_chunks(chunks: &[((i32, i32, i32), Option<(u32, u32)>)]) -> SaveData {
+pub fn mark_chunks(chunks: &[((i32, i32, i32), Option<(u32, u32, u32)>)]) -> SaveData {
     let mut bricks = vec![];
 
     for (pos, opt) in chunks.iter() {
         let center = chunk_center(*pos);
         let col = match opt {
-            Some((_, colliders)) if *colliders <= COLLIDER_LIMIT => 1,
-            Some((_, colliders)) if *colliders > COLLIDER_LIMIT => 2,
+            Some((_, colliders, components)) if *colliders > COLLIDER_LIMIT && *components > COMPONENT_LIMIT => 4,
+            Some((_, _colliders, components)) if *components > COMPONENT_LIMIT => 3,
+            Some((_, colliders, _components)) if *colliders > COLLIDER_LIMIT => 2,
+            Some((_, colliders, _components)) if *colliders <= COLLIDER_LIMIT => 1,
             _ => 0,
         };
 
@@ -161,37 +177,37 @@ async fn main() {
 
     while let Some(message) = rx.recv().await {
         match message {
-            rpc::Message::Request {
-                method, id, params, ..
-            } if method == "init" || method == "stop" => {
-                if method == "init" {
-                    if let Some(params) = params {
-                        let mut cfg = config.write().await;
-                        *cfg = serde_json::from_value(params).unwrap();
-                    }
-                }
-                omegga.write_response(
-                    id,
-                    if method == "init" {
-                        Some(json!({"registeredCommands": ["chunks"]}))
-                    } else {
-                        None
-                    },
-                    None,
-                );
+            Event::Init { id, config: _config } =>
+            {
+              let mut cfg = config.write().await;
+              *cfg = serde_json::from_value(_config).unwrap();
+              omegga.write_response(
+                  id,
+                  Some(json!({"registeredCommands": ["chunks"]})),
+                  None,
+              );
             }
-            rpc::Message::Notification { method, params, .. } if method == "cmd:chunks" => {
+            Event::Stop { id } => {
+              omegga.write_response(
+                id,
+                None,
+                None,
+              );
+            }
+            Event::Command { player, command, args } => {
+              if command == "chunks" {
                 let omegga = omegga.clone();
                 let config = config.clone();
                 let analyzed_save = analyzed_save.clone();
-
+  
                 tokio::spawn(async move {
                     if let Err(e) =
-                        run_command(omegga.clone(), config, analyzed_save, params.unwrap()).await
+                        run_command(omegga.clone(), config, analyzed_save, player, args).await
                     {
                         omegga.error(format!("An error occurred: {}", e));
                     }
                 });
+              }
             }
             _ => (),
         }
@@ -202,7 +218,8 @@ async fn run_command(
     omegga: Arc<Omegga>,
     config: Arc<RwLock<Option<Config>>>,
     analyzed_save: Arc<RwLock<Option<AnalyzedSave>>>,
-    params: Value,
+    user: String,
+    args: Vec<String>,
 ) -> Result<()> {
     let config_read = config.read().await;
     let config = match &*config_read {
@@ -210,14 +227,7 @@ async fn run_command(
         None => return Ok(()),
     };
 
-    let mut params = serde_json::from_value::<Vec<String>>(params)
-        .unwrap()
-        .into_iter();
-    let user = params.next().unwrap();
-    let command = match params.next() {
-        Some(c) => c,
-        None => return Ok(()),
-    };
+    let command = &args[0];
 
     if !config
         .authorized
@@ -238,7 +248,7 @@ async fn run_command(
                 omegga.whisper(user, "<color=\"a00\">Failed to save!</>");
                 return Ok(());
             }
-            sleep(Duration::from_millis(250)).await;
+            sleep(Duration::from_millis(2500)).await;
             let path = match omegga.get_save_path(SAVE_NAME).await {
                 Ok(Some(p)) => p,
                 _ => {
@@ -279,12 +289,13 @@ async fn run_command(
                     let pos = omegga.get_player_position(user.clone()).await?.ok_or(anyhow!("player has no position"))?;
 
                     let chunk_pos = pos_to_chunk((pos.0 as i32, pos.1 as i32, pos.2 as i32));
-                    if let Some((bricks, colliders)) = save.chunk_colliders.get(&chunk_pos) {
+                    if let Some((bricks, colliders, components)) = save.chunk_colliders.get(&chunk_pos) {
                         omegga.whisper(user, format!(
-                            "There are <b>{} bricks</> and <b><color=\"{}\">{} colliders</></> in the chunk {:?}.",
+                            "There are <b>{} bricks</>, <b><color=\"{}\">{} colliders</></>, and <b>{} components</> in the chunk {:?}.",
                             bricks,
                             if *colliders > COLLIDER_LIMIT { "a00" } else { "0a0" },
                             colliders,
+                            components,
                             chunk_pos,
                         ));
                     } else {
